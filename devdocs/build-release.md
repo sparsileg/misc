@@ -30,7 +30,7 @@ build`/`cargo check` — run from either the repo root or from
 `Photyx/src-tauri/target/...`. Keep this in mind for CI caching paths
 and any script that looks for the binary.
 
-### Three version numbers that must not be confused
+### Version numbers that must not be confused
 
 | File                        | Field               | Who reads it                                                                                                                                                                                  |
 | --------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -441,6 +441,7 @@ number, essentially).
 
 ```bash
 gh release list
+git tag -l
 # note the tag name
 
 # delete remote tag
@@ -699,8 +700,6 @@ link updates needed on future releases.
 - cd to repo home (.../github/astryx-home)
 - `npx wrangler deploy`
 
-
-
 ### photyx
 
 * Update `src-tauri/Cargo.toml` and `package.json` with the correct version number
@@ -714,8 +713,6 @@ link updates needed on future releases.
   * https://github.com/sparsileg/Photyx/releases/latest/download/photyx-linux-x86_64.deb
   
   * https://github.com/sparsileg/Photyx/releases/latest/download/photyx-windows-x86_64.exe
-
-
 
 ---
 

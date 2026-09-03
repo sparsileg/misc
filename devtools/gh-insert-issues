@@ -104,14 +104,27 @@ SIZE_RE  = re.compile(r"^Size:\s*(.+)$", re.MULTILINE)
 #
 
 def detect_repo():
-    try:
-        return run([
-            "gh", "repo", "view",
-            "--json", "nameWithOwner",
-            "--jq", ".nameWithOwner"
-        ])
-    except subprocess.CalledProcessError:
-        return None
+    # gh repo view hits GitHub's API — a transient network blip, DNS
+    # hiccup, or token refresh can fail it once even in a perfectly
+    # valid repo. The old version caught CalledProcessError and returned
+    # None with no trace of why, so a one-off network failure looked
+    # identical to "not a git repo" and the real cause was invisible.
+    # One retry covers the common transient case; if it still fails,
+    # print gh's actual stderr so a real failure (no remote, not a git
+    # repo, auth expired) is distinguishable from a fluke.
+    last_stderr = None
+    for attempt in range(2):
+        try:
+            return run([
+                "gh", "repo", "view",
+                "--json", "nameWithOwner",
+                "--jq", ".nameWithOwner"
+            ])
+        except subprocess.CalledProcessError as e:
+            last_stderr = e.stderr
+    if last_stderr:
+        print(f"gh repo view failed: {last_stderr.strip()}")
+    return None
 
 def ensure_label(repo, label):
     existing = subprocess.run(
