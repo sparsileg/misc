@@ -1,0 +1,6 @@
+{
+  "name": "kansha",
+  "version": "0.1.0",
+  "description": "Kansha side pane: version sync, uncommitted/unpushed changes, whether perf and just check passed since the code last changed; /bump, /ship, push guard, rule linter, test tracker",
+  "types": "./types/index.d.ts"
+}

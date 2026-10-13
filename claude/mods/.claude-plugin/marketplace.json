@@ -1,0 +1,8 @@
+{
+  "name": "stan-mods",
+  "owner": { "name": "Stan" },
+  "plugins": [
+    { "name": "astryx", "source": "./astryx" },
+    { "name": "kansha", "source": "./kansha" }
+  ]
+}

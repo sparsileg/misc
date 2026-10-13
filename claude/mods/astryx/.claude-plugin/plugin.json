@@ -1,0 +1,6 @@
+{
+  "name": "astryx",
+  "version": "0.1.0",
+  "description": "Astryx side pane: version sync, uncommitted/unpushed changes, and whether tests passed since the code last changed",
+  "types": "./types/index.d.ts"
+}
