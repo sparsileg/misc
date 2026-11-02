@@ -121,6 +121,15 @@ export const isGuardedPush = (command: string): boolean =>
     .some(segment => isGitPush(segment) && !isDeleteOnlyPush(segment))
 
 /**
+ * Whether a push concerns the Kansha repo: the shell's repo is Kansha (origin
+ * sparsileg/kansha), or the command names a path segment `kansha` (cd or -C
+ * into it from elsewhere). Pushes of other repos pass the guard untouched.
+ */
+export const isKanshaPush = (command: string, originUrl: string): boolean =>
+  /[:/]sparsileg\/kansha(?:\.git)?\/?$/.test(originUrl.trim()) ||
+  /(?:^|[\s/'"=])kansha(?=$|[\s/'";&|)])/.test(stripHeredocs(command))
+
+/**
  * Whether a push needs passing just perf and just check: it sends a tag, or
  * its commits touch tested code. `outgoing` is the files the unpushed commits
  * change, or null when git could not tell (no upstream): then tests are needed.

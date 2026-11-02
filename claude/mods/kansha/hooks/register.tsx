@@ -10,6 +10,7 @@ import {
   isBumpKind,
   isFullTestCommand,
   isGuardedPush,
+  isKanshaPush,
   isMigration,
   isPerfCommand,
   isShipIt,
@@ -87,7 +88,7 @@ const STORE_RELEASE = 'release'
 const FEATURES: ModFeature[] = [
   { name: 'Pane status', does: 'Version sync (package.json, package-lock.json, tauri.conf.json, Cargo.toml, version.test.ts), branch, uncommitted and unpushed changes, whether just perf and just check passed since the code last changed', runs: 'automatic; /kansha opens the pane' },
   { name: '/bump', does: 'Bumps the version in every version file, Cargo.lock, and version.test.ts together', runs: '/bump patch|minor' },
-  { name: 'Push guard', does: 'Refuses a push with mismatched versions, stale perf or check (not needed when the commits touch no code and no tag goes), or a dirty tree; holds a good one for approval', runs: 'automatic; Approve push or /push-ok' },
+  { name: 'Push guard', does: 'Refuses a push with mismatched versions, stale perf or check (not needed when the commits touch no code and no tag goes), or a dirty tree; holds a good one for approval. Pushes of other repos pass', runs: 'automatic; Approve push or /push-ok' },
   { name: '/ship', does: 'Checks, just perf, just check, then ships: commit, tag, push main and the tag; watches the release build and offers Publish', runs: '/ship [patch|minor], then "ship it"' },
   { name: 'Rule linter', does: 'Flags hard-rule breaks in lines an edit adds (unwrap/expect, unsafe, floats, SQL outside persistence, real time outside the Clock, JS Date, console.log) and edits to released migrations', runs: 'automatic' },
   { name: 'Test tracker', does: 'Changes awaiting your test, dated reminders, and items to decide (not in the briefing), with a briefing at session start', runs: 'automatic; pane buttons' },
@@ -363,6 +364,9 @@ const bumpTo = async ($: EngineInterface, kind: BumpKind): Promise<string> => {
   await refresh($)
   return `Bumped ${now} -> ${version} (${kind}) in ${[PACKAGE_JSON, PACKAGE_LOCK, TAURI_CONF, CARGO_TOML, CARGO_LOCK, VERSION_TEST].join(', ')}.`
 }
+
+// The shell's repo origin; '' outside a repo or without one
+const originUrl = ($: EngineInterface): Promise<string> => git($, ['remote', 'get-url', 'origin'])
 
 // Files the unpushed commits change; null when git cannot tell (no upstream)
 const outgoingFiles = async ($: EngineInterface): Promise<string[] | null> => {
@@ -657,7 +661,7 @@ export const register: Register = on => {
   // A permission "ask" is decided by auto mode, not Stan, hence the approval.
   on('tool.check', { tool: 'Bash' }, async ($, e, next) => {
     const command = (e.input as { command?: string }).command ?? ''
-    if (!isGuardedPush(command)) return next(e)
+    if (!isGuardedPush(command) || !isKanshaPush(command, await originUrl($))) return next(e)
     const tag = pushedTag(command)
     const problems = await pushProblems($, tag)
     const version = versionsAgree((await readVersions($)).map(v => v.version)) ?? '?'
@@ -694,7 +698,7 @@ export const register: Register = on => {
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     const ran = await next(e)
     const passed = ran.deny === undefined && ran.isError !== true
-    if (isGuardedPush(e.command) && ran.deny === undefined) {
+    if (isGuardedPush(e.command) && ran.deny === undefined && isKanshaPush(e.command, await originUrl($))) {
       await update($, push, p => ({ ...p, approved: null }))
       // The push went out: the ship is done, and a pushed tag starts the release build
       if (ran.isError !== true) {

@@ -6,6 +6,7 @@ import {
   isFullTestCommand,
   isGitPush,
   isGuardedPush,
+  isKanshaPush,
   isMigration,
   isPerfCommand,
   isShipIt,
@@ -268,5 +269,25 @@ describe('pushNeedsTests', () => {
   test('a tag or an unknown upstream needs tests', () => {
     expect(pushNeedsTests(['devdocs/x.md'], tested, 'v1.0.0')).toBe(true)
     expect(pushNeedsTests(null, tested, null)).toBe(true)
+  })
+})
+
+describe('isKanshaPush', () => {
+  const kansha = 'https://github.com/sparsileg/kansha.git'
+  const misc = 'https://github.com/sparsileg/misc.git'
+  test('the Kansha repo is guarded', () => {
+    expect(isKanshaPush('git push', kansha)).toBe(true)
+    expect(isKanshaPush('git push', 'git@github.com:sparsileg/kansha.git')).toBe(true)
+    expect(isKanshaPush('git push', 'https://github.com/sparsileg/kansha')).toBe(true)
+  })
+  test('other repos pass', () => {
+    expect(isKanshaPush('git push', misc)).toBe(false)
+    expect(isKanshaPush('git push', '')).toBe(false)
+    expect(isKanshaPush('git push', 'https://github.com/sparsileg/kansha-site.git')).toBe(false)
+    expect(isKanshaPush("git commit -F - <<'EOF'\nkansha mod: x\nEOF\ngit push", misc)).toBe(false)
+  })
+  test('a push into Kansha from elsewhere is guarded', () => {
+    expect(isKanshaPush('cd ~/github/kansha && git push', misc)).toBe(true)
+    expect(isKanshaPush('git -C /home/stan/github/kansha push', '')).toBe(true)
   })
 })
