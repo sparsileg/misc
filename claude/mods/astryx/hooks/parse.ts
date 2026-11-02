@@ -74,6 +74,35 @@ export const setLockVersion = (text: string, name: string, version: string): str
 export const isGitPush = (command: string): boolean =>
   /(^|[^\w"'\-])git\s+(-[Cc]\s+\S+\s+|-\S+\s+)*push(?![\w-])/.test(command)
 
+/** A command line without its heredoc bodies, which are text, not commands */
+const stripHeredocs = (command: string): string => {
+  const out: string[] = []
+  let end: string | null = null
+  for (const line of command.split('\n')) {
+    if (end !== null) {
+      if (line.trim() === end) end = null
+      continue
+    }
+    out.push(line)
+    end = /<<-?\s*['"]?(\w+)['"]?/.exec(line)?.[1] ?? null
+  }
+  return out.join('\n')
+}
+
+/** A push that only deletes remote refs (--delete, -d, :ref) ships nothing */
+const isDeleteOnlyPush = (segment: string): boolean => {
+  const words = segment.replace(/^[\s\S]*?\bpush\b/, '').trim().split(/\s+/).filter(Boolean)
+  if (words.includes('--delete') || words.includes('-d')) return true
+  const refspecs = words.filter(w => !w.startsWith('-')).slice(1)
+  return refspecs.length > 0 && refspecs.every(r => r.startsWith(':'))
+}
+
+/** A push the guard must hold: any push in the line that sends commits or tags */
+export const isGuardedPush = (command: string): boolean =>
+  stripHeredocs(command)
+    .split(/&&|\|\||[;|\n]/)
+    .some(segment => isGitPush(segment) && !isDeleteOnlyPush(segment))
+
 /** `just update-snapshots`, or the env var it sets, wherever it sits */
 export const isSnapshotUpdate = (command: string): boolean =>
   /(^|[^\w"'\-])just\s+update-snapshots(?![\w-])/.test(command) ||

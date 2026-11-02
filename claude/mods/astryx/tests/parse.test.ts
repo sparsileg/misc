@@ -66,7 +66,7 @@ describe('astryx bump', () => {
   })
 })
 
-import { isGitPush } from '../hooks/parse'
+import { isGitPush, isGuardedPush } from '../hooks/parse'
 
 describe('astryx push detection', () => {
   test('finds a push wherever it sits', async () => {
@@ -79,6 +79,21 @@ describe('astryx push detection', () => {
     expect(isGitPush('git status')).toBe(false)
     expect(isGitPush('git push-helper')).toBe(false)
     expect(isGitPush('grep "git push" notes.md')).toBe(false)
+  })
+
+  test('holds only pushes that ship commits or tags', async () => {
+    expect(isGuardedPush('git push')).toBe(true)
+    expect(isGuardedPush('git push origin main v0.10.1')).toBe(true)
+    expect(isGuardedPush('git commit -m x && git push')).toBe(true)
+    expect(isGuardedPush('git push origin --delete release-test')).toBe(false)
+    expect(isGuardedPush('git push -d origin old')).toBe(false)
+    expect(isGuardedPush('git push origin :old')).toBe(false)
+    expect(isGuardedPush('git branch -D x && git push origin --delete x')).toBe(false)
+    expect(isGuardedPush('git push origin --delete x && git push origin main')).toBe(true)
+    expect(isGuardedPush('git push origin --delete x; git push')).toBe(true)
+    expect(isGuardedPush("python3 - <<'EOF'\nprint('a && git push')\nEOF\necho done")).toBe(false)
+    expect(isGuardedPush("cat <<EOF\ntext\nEOF\ngit push")).toBe(true)
+    expect(isGuardedPush('git status')).toBe(false)
   })
 })
 

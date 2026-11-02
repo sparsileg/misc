@@ -12,7 +12,7 @@ import {
   hasName,
   isBumpKind,
   isFullTestCommand,
-  isGitPush,
+  isGuardedPush,
   isShipIt,
   isSnapshotUpdate,
   lastLines,
@@ -708,7 +708,7 @@ export const register: Register = on => {
   // A permission "ask" is decided by auto mode, not Stan, hence the approval.
   on('tool.check', { tool: 'Bash' }, async ($, e, next) => {
     const command = (e.input as { command?: string }).command ?? ''
-    if (!isGitPush(command)) return next(e)
+    if (!isGuardedPush(command)) return next(e)
     const branch = (await git($, ['branch', '--show-current'])).trim()
     if (branch !== DEPLOY_BRANCH && !command.includes(DEPLOY_BRANCH)) return next(e)
     const problems = await pushProblems($)
@@ -756,7 +756,7 @@ export const register: Register = on => {
     const ran = await next(e)
     if (isUpdate && ran.deny === undefined) await reviewSnapshots($, before)
     const passed = ran.deny === undefined && ran.isError !== true
-    if (isGitPush(e.command) && ran.deny === undefined) {
+    if (isGuardedPush(e.command) && ran.deny === undefined) {
       await update($, push, p => ({ ...p, approved: null }))
       // The push went out: the ship is done, and a pushed tag starts the release build
       if (ran.isError !== true) {
