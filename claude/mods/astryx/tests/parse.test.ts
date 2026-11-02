@@ -66,7 +66,7 @@ describe('astryx bump', () => {
   })
 })
 
-import { isGitPush, isGuardedPush } from '../hooks/parse'
+import { isGitPush, isGuardedPush, pushDirs } from '../hooks/parse'
 
 describe('astryx push detection', () => {
   test('finds a push wherever it sits', async () => {
@@ -94,6 +94,17 @@ describe('astryx push detection', () => {
     expect(isGuardedPush("python3 - <<'EOF'\nprint('a && git push')\nEOF\necho done")).toBe(false)
     expect(isGuardedPush("cat <<EOF\ntext\nEOF\ngit push")).toBe(true)
     expect(isGuardedPush('git status')).toBe(false)
+  })
+
+  test('finds the directory each push runs in', async () => {
+    expect(pushDirs('git push origin main')).toEqual([null])
+    expect(pushDirs('git -C ~/github/astryx-home push origin main')).toEqual(['~/github/astryx-home'])
+    expect(pushDirs('git -C "/repo" push')).toEqual(['/repo'])
+    expect(pushDirs('cd /home/stan/github/astryx-home && git push origin main')).toEqual(['/home/stan/github/astryx-home'])
+    expect(pushDirs('cd /x && cd "/y" && git push; cd /z')).toEqual(['/y'])
+    expect(pushDirs('cd /x && git -C /y push')).toEqual(['/y'])
+    expect(pushDirs('git push origin --delete old')).toEqual([])
+    expect(pushDirs('cd /a && git push && cd /b && git push origin v1.0.0')).toEqual(['/a', '/b'])
   })
 })
 

@@ -103,6 +103,22 @@ export const isGuardedPush = (command: string): boolean =>
     .split(/&&|\|\||[;|\n]/)
     .some(segment => isGitPush(segment) && !isDeleteOnlyPush(segment))
 
+/** The directory each guarded push in the line runs in: its `git -C <dir>`,
+ *  else the last `cd <dir>` before it, else null (the shell's own directory).
+ *  Lets the guard skip pushes to other repos, such as astryx-home. */
+export const pushDirs = (command: string): (string | null)[] => {
+  const dirs: (string | null)[] = []
+  let cd: string | null = null
+  for (const segment of stripHeredocs(command).split(/&&|\|\||[;|\n]/)) {
+    const cdTo = /^\s*cd\s+(?:--\s+)?(['"]?)([^'"\s]+)\1\s*$/.exec(segment)?.[2]
+    if (cdTo !== undefined) cd = cdTo
+    if (isGitPush(segment) && !isDeleteOnlyPush(segment)) {
+      dirs.push(/\bgit\s+(?:-\S+\s+)*?-C\s+(['"]?)([^'"\s]+)\1/.exec(segment)?.[2] ?? cd)
+    }
+  }
+  return dirs
+}
+
 /** `just update-snapshots`, or the env var it sets, wherever it sits */
 export const isSnapshotUpdate = (command: string): boolean =>
   /(^|[^\w"'\-])just\s+update-snapshots(?![\w-])/.test(command) ||

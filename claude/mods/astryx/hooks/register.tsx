@@ -13,6 +13,7 @@ import {
   isBumpKind,
   isFullTestCommand,
   isGuardedPush,
+  pushDirs,
   isShipIt,
   isSnapshotUpdate,
   lastLines,
@@ -115,6 +116,22 @@ let dockColumns: number | null = null
 const git = async ($: EngineInterface, args: string[]): Promise<string> => {
   const run = await $.process.run(['git', ...args])
   return run.exitCode === 0 ? run.stdout : ''
+}
+
+// The top of the repo a directory sits in ('' outside one); null is the
+// shell's own directory, and a leading ~ is the home folder
+const repoOf = async ($: EngineInterface, dir: string | null): Promise<string> => {
+  const script = 'd=${1:-.}; case $d in "~"*) d=$HOME${d#"~"};; esac; cd -- "$d" 2>/dev/null && git rev-parse --show-toplevel'
+  const run = await $.process.run(['sh', '-c', script, 'sh', dir ?? ''])
+  return run.exitCode === 0 ? run.stdout.trim() : ''
+}
+
+// Whether any push in the line goes out from the Astryx repo (the session's
+// root); pushes from other repos, such as astryx-home, aren't guarded
+const pushesAstryx = async ($: EngineInterface, command: string): Promise<boolean> => {
+  const astryx = await repoOf($, await $.session.root())
+  for (const dir of pushDirs(command)) if ((await repoOf($, dir)) === astryx) return true
+  return false
 }
 
 // Content hash of the tested paths as they stand on disk: unchanged by a
@@ -708,7 +725,7 @@ export const register: Register = on => {
   // A permission "ask" is decided by auto mode, not Stan, hence the approval.
   on('tool.check', { tool: 'Bash' }, async ($, e, next) => {
     const command = (e.input as { command?: string }).command ?? ''
-    if (!isGuardedPush(command)) return next(e)
+    if (!isGuardedPush(command) || !(await pushesAstryx($, command))) return next(e)
     const branch = (await git($, ['branch', '--show-current'])).trim()
     if (branch !== DEPLOY_BRANCH && !command.includes(DEPLOY_BRANCH)) return next(e)
     const problems = await pushProblems($)
@@ -756,7 +773,7 @@ export const register: Register = on => {
     const ran = await next(e)
     if (isUpdate && ran.deny === undefined) await reviewSnapshots($, before)
     const passed = ran.deny === undefined && ran.isError !== true
-    if (isGuardedPush(e.command) && ran.deny === undefined) {
+    if (isGuardedPush(e.command) && ran.deny === undefined && (await pushesAstryx($, e.command))) {
       await update($, push, p => ({ ...p, approved: null }))
       // The push went out: the ship is done, and a pushed tag starts the release build
       if (ran.isError !== true) {
