@@ -227,13 +227,14 @@ export const localDate = (ms: number, days = 0): string => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-/** Due reminders (undated ones count), tests awaiting Stan, and reminders still ahead */
+/** Due reminders (undated ones count), tests awaiting Stan, reminders still ahead, and items to decide */
 export const splitTracker = (items: TrackerItem[], today: string) => ({
   due: items.filter(i => i.kind === 'reminder' && (i.due ?? today) <= today),
   waiting: items.filter(i => i.kind === 'test'),
   later: items
     .filter(i => i.kind === 'reminder' && (i.due ?? today) > today)
     .sort((a, b) => (a.due ?? '').localeCompare(b.due ?? '')),
+  decide: items.filter(i => i.kind === 'decide'),
 })
 
 /** An issue on the GitHub project board, in its Status column */

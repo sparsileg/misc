@@ -49,7 +49,7 @@ export type ReleaseWatch = {
 export type LintFinding = { file: string; line: number; text: string; message: string }
 
 /** Something awaiting Stan's test, or a reminder dated YYYY-MM-DD */
-export type TrackerItem = { id: string; kind: 'test' | 'reminder'; label: string; text: string; due?: string }
+export type TrackerItem = { id: string; kind: 'test' | 'reminder' | 'decide'; label: string; text: string; due?: string }
 
 declare module 'claude-code' {
   interface PluginState {

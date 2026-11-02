@@ -202,13 +202,15 @@ describe('kansha tracker and open items', () => {
           { id: 'b', kind: 'reminder', label: 'B', text: 'ahead', due: '2026-10-20' },
           { id: 'c', kind: 'test', label: 'C', text: 'try it' },
           { id: 'd', kind: 'reminder', label: 'D', text: 'undated' },
+          { id: 'e', kind: 'decide', label: 'E', text: 'settle it' },
         ],
       }),
     )
-    const { due, waiting, later } = splitTracker(items, '2026-10-10')
+    const { due, waiting, later, decide } = splitTracker(items, '2026-10-10')
     expect(due.map(i => i.id)).toEqual(['a', 'd'])
     expect(waiting.map(i => i.id)).toEqual(['c'])
     expect(later.map(i => i.id)).toEqual(['b'])
+    expect(decide.map(i => i.id)).toEqual(['e'])
     expect(parseTracker('not json')).toEqual([])
     expect(localDate(new Date(2026, 9, 31, 12).getTime(), 1)).toBe('2026-11-01')
   })

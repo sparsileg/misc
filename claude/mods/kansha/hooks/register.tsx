@@ -90,7 +90,7 @@ const FEATURES: ModFeature[] = [
   { name: 'Push guard', does: 'Refuses a push with mismatched versions, stale perf or check (not needed when the commits touch no code and no tag goes), or a dirty tree; holds a good one for approval', runs: 'automatic; Approve push or /push-ok' },
   { name: '/ship', does: 'Checks, just perf, just check, then ships: commit, tag, push main and the tag; watches the release build and offers Publish', runs: '/ship [patch|minor], then "ship it"' },
   { name: 'Rule linter', does: 'Flags hard-rule breaks in lines an edit adds (unwrap/expect, unsafe, floats, SQL outside persistence, real time outside the Clock, JS Date, console.log) and edits to released migrations', runs: 'automatic' },
-  { name: 'Test tracker', does: 'Changes awaiting your test and dated reminders, with a briefing at session start', runs: 'automatic; pane buttons' },
+  { name: 'Test tracker', does: 'Changes awaiting your test, dated reminders, and items to decide (not in the briefing), with a briefing at session start', runs: 'automatic; pane buttons' },
   { name: '/open-items', does: 'Due reminders, tests awaiting you, In progress and To Do issues (project 16)', runs: '/open-items' },
   { name: '/list-mods', does: 'This list', runs: '/list-mods' },
 ]
@@ -276,7 +276,7 @@ const changeTracker = async (
 }
 
 const closeItem = ($: EngineInterface, item: TrackerItem) =>
-  changeTracker($, items => items.filter(i => i.id !== item.id), `${item.label}: ${item.kind === 'test' ? 'tested' : 'done'}`)
+  changeTracker($, items => items.filter(i => i.id !== item.id), `${item.label}: ${item.kind === 'test' ? 'tested' : item.kind === 'decide' ? 'resolved' : 'done'}`)
 
 const snoozeItem = async ($: EngineInterface, item: TrackerItem) => {
   const due = localDate(await $.clock.now(), 1)
@@ -733,7 +733,7 @@ export const register: Register = on => {
     const shipping = await read($, ship)
     const building = await read($, release)
     const findings = await read($, lint)
-    const { due, waiting: awaiting, later } = splitTracker(await read($, tracker), localDate(s.checkedAt))
+    const { due, waiting: awaiting, later, decide } = splitTracker(await read($, tracker), localDate(s.checkedAt))
 
     const isMismatch = versionsAgree(s.versions.map(v => v.version)) === null
     const pathWidth = Math.max(...s.versions.map(v => v.path.length))
@@ -774,6 +774,21 @@ export const register: Register = on => {
                   {i.label}  {i.text}{' '}
                 </Text>
                 <Button key={`tested-${i.id}`} label="Tested" onPress={() => closeItem($, i)} />
+              </Box>
+            ))}
+            <Text> </Text>
+          </Box>
+        )}
+        {decide.length > 0 && (
+          <Box flexDirection="column">
+            <Text bold>TO DECIDE ({decide.length})</Text>
+            {decide.map(i => (
+              <Box key={`decide-${i.id}`}>
+                <Text>
+                  {'  '}
+                  {i.label}  {i.text}{' '}
+                </Text>
+                <Button key={`resolved-${i.id}`} label="Resolved" onPress={() => closeItem($, i)} />
               </Box>
             ))}
             <Text> </Text>
