@@ -23,6 +23,7 @@ import {
   parseTracker,
   parseVersionTest,
   pushedTag,
+  pushNeedsTests,
   rustTestStart,
   setCargoVersion,
   setJsonVersion,
@@ -243,5 +244,27 @@ describe('kansha tracker and open items', () => {
     expect(listModsText(features, 80)).toBe(
       'KANSHA MODS (2)\n  /bump       bump every version [/bump patch|minor]\n  Push guard  holds pushes [automatic]',
     )
+  })
+})
+
+describe('pushNeedsTests', () => {
+  const tested = ['crates', 'src-tauri', 'src', 'tests', 'package.json', 'Cargo.toml', 'justfile']
+  test('docs-only commits skip tests', () => {
+    expect(pushNeedsTests(['devdocs/tax-planning-design.md'], tested, null)).toBe(false)
+    expect(pushNeedsTests(['README.md', 'guide/kansha-guide.pdf'], tested, null)).toBe(false)
+    expect(pushNeedsTests([], tested, null)).toBe(false)
+  })
+  test('tested code needs tests', () => {
+    expect(pushNeedsTests(['devdocs/x.md', 'crates/kansha-core/src/lib.rs'], tested, null)).toBe(true)
+    expect(pushNeedsTests(['package.json'], tested, null)).toBe(true)
+    expect(pushNeedsTests(['justfile'], tested, null)).toBe(true)
+  })
+  test('path prefix is a whole folder name', () => {
+    expect(pushNeedsTests(['src-docs/notes.md'], ['src'], null)).toBe(false)
+    expect(pushNeedsTests(['srcfile.md'], ['src'], null)).toBe(false)
+  })
+  test('a tag or an unknown upstream needs tests', () => {
+    expect(pushNeedsTests(['devdocs/x.md'], tested, 'v1.0.0')).toBe(true)
+    expect(pushNeedsTests(null, tested, null)).toBe(true)
   })
 })

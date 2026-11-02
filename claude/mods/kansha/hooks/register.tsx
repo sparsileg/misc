@@ -27,6 +27,7 @@ import {
   parseStagedHashes,
   parseTracker,
   pushedTag,
+  pushNeedsTests,
   releaseTag,
   rustTestStart,
   setCargoVersion,
@@ -86,7 +87,7 @@ const STORE_RELEASE = 'release'
 const FEATURES: ModFeature[] = [
   { name: 'Pane status', does: 'Version sync (package.json, package-lock.json, tauri.conf.json, Cargo.toml, version.test.ts), branch, uncommitted and unpushed changes, whether just perf and just check passed since the code last changed', runs: 'automatic; /kansha opens the pane' },
   { name: '/bump', does: 'Bumps the version in every version file, Cargo.lock, and version.test.ts together', runs: '/bump patch|minor' },
-  { name: 'Push guard', does: 'Refuses a push with mismatched versions, stale perf or check, or a dirty tree; holds a good one for approval', runs: 'automatic; Approve push or /push-ok' },
+  { name: 'Push guard', does: 'Refuses a push with mismatched versions, stale perf or check (not needed when the commits touch no code and no tag goes), or a dirty tree; holds a good one for approval', runs: 'automatic; Approve push or /push-ok' },
   { name: '/ship', does: 'Checks, just perf, just check, then ships: commit, tag, push main and the tag; watches the release build and offers Publish', runs: '/ship [patch|minor], then "ship it"' },
   { name: 'Rule linter', does: 'Flags hard-rule breaks in lines an edit adds (unwrap/expect, unsafe, floats, SQL outside persistence, real time outside the Clock, JS Date, console.log) and edits to released migrations', runs: 'automatic' },
   { name: 'Test tracker', does: 'Changes awaiting your test and dated reminders, with a briefing at session start', runs: 'automatic; pane buttons' },
@@ -363,22 +364,32 @@ const bumpTo = async ($: EngineInterface, kind: BumpKind): Promise<string> => {
   return `Bumped ${now} -> ${version} (${kind}) in ${[PACKAGE_JSON, PACKAGE_LOCK, TAURI_CONF, CARGO_TOML, CARGO_LOCK, VERSION_TEST].join(', ')}.`
 }
 
-// Push guard: the reasons a push must not go out, checked fresh
-const pushProblems = async ($: EngineInterface): Promise<string[]> => {
-  const [versions, porcelain, current, tested, perfed] = await Promise.all([
+// Files the unpushed commits change; null when git cannot tell (no upstream)
+const outgoingFiles = async ($: EngineInterface): Promise<string[] | null> => {
+  const run = await $.process.run(['git', 'diff', '--name-only', '@{upstream}..HEAD'])
+  return run.exitCode === 0 ? run.stdout.split('\n').filter(Boolean) : null
+}
+
+// Push guard: the reasons a push must not go out, checked fresh. A push whose
+// commits touch no tested code (docs only) and sends no tag skips perf and check.
+const pushProblems = async ($: EngineInterface, tag: string | null = null): Promise<string[]> => {
+  const [versions, porcelain, current, tested, perfed, outgoing] = await Promise.all([
     readVersions($),
     git($, ['status', '--porcelain']),
     fingerprint($),
     $.store.get(STORE_FINGERPRINT),
     $.store.get(STORE_PERF_FINGERPRINT),
+    outgoingFiles($),
   ])
   const dirty = porcelain.split('\n').filter(Boolean).length
   const problems: string[] = []
   if (versionsAgree(versions.map(v => v.version)) === null) problems.push(`versions differ: ${versionsText(versions)}`)
-  if (perfed === undefined) problems.push('no recorded pass of just perf')
-  else if (perfed !== current) problems.push('code changed since the last passing just perf')
-  if (tested === undefined) problems.push('no recorded pass of just check')
-  else if (tested !== current) problems.push('code changed since the last passing just check')
+  if (pushNeedsTests(outgoing, TESTED_PATHS, tag)) {
+    if (perfed === undefined) problems.push('no recorded pass of just perf')
+    else if (perfed !== current) problems.push('code changed since the last passing just perf')
+    if (tested === undefined) problems.push('no recorded pass of just check')
+    else if (tested !== current) problems.push('code changed since the last passing just check')
+  }
   if (dirty > 0) problems.push(`${dirty} uncommitted file${dirty === 1 ? '' : 's'}; commit first, then push on its own`)
   return problems
 }
@@ -647,9 +658,9 @@ export const register: Register = on => {
   on('tool.check', { tool: 'Bash' }, async ($, e, next) => {
     const command = (e.input as { command?: string }).command ?? ''
     if (!isGuardedPush(command)) return next(e)
-    const problems = await pushProblems($)
-    const version = versionsAgree((await readVersions($)).map(v => v.version)) ?? '?'
     const tag = pushedTag(command)
+    const problems = await pushProblems($, tag)
+    const version = versionsAgree((await readVersions($)).map(v => v.version)) ?? '?'
     if (tag !== null && tag !== releaseTag(version))
       problems.push(`tag ${tag} does not match the version ${version}; CI names the release ${releaseTag(version)}`)
     if (problems.length > 0) {

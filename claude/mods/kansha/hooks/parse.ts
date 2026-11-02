@@ -120,6 +120,16 @@ export const isGuardedPush = (command: string): boolean =>
     .split(/&&|\|\||[;|\n]/)
     .some(segment => isGitPush(segment) && !isDeleteOnlyPush(segment))
 
+/**
+ * Whether a push needs passing just perf and just check: it sends a tag, or
+ * its commits touch tested code. `outgoing` is the files the unpushed commits
+ * change, or null when git could not tell (no upstream): then tests are needed.
+ */
+export const pushNeedsTests = (outgoing: string[] | null, testedPaths: string[], tag: string | null): boolean =>
+  tag !== null ||
+  outgoing === null ||
+  outgoing.some(file => testedPaths.some(path => file === path || file.startsWith(`${path}/`)))
+
 /** /ship's arguments: nothing, or the bump to make first; null for anything else */
 export const parseShipArgs = (args: string): { bump: BumpKind | null } | null => {
   const words = args.trim().split(/\s+/).filter(Boolean)
