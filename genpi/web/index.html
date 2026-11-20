@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi Approximations</title>
+<meta name="description" content="Watch six ways of approximating π converge, one element at a time, and learn how each one works.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232563eb'/%3E%3Ctext x='16' y='24' font-size='22' font-family='serif' text-anchor='middle' fill='white'%3E%CF%80%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="pi.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="controls">
+  <div class="row">
+    <label class="field">Algorithm
+      <select id="algo"></select>
+    </label>
+    <label class="field"><span id="n-label">Terms</span>
+      <input id="n" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10"
+             value="1000" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="buttons">
+      <button id="start" type="button">Start</button>
+      <button id="pause" type="button" disabled>Pause</button>
+      <button id="reset" type="button">Reset</button>
+      <button id="learn" type="button" title="Learn how this works (F1)">Learn…</button>
+    </div>
+    <span id="status" role="status"></span>
+  </div>
+  <p id="formula"></p>
+</header>
+
+<main>
+  <aside class="side">
+    <div class="speed">
+      <div>Speed</div>
+      <canvas id="dial" tabindex="0" role="slider" aria-label="Speed"></canvas>
+      <div id="rate"></div>
+      <div class="hint">drag, scroll, or use arrow keys</div>
+    </div>
+    <div class="readout">
+      <div id="count"></div>
+      <div class="muted">Estimate</div>
+      <div class="big"><span id="est-good"></span><span id="est-bad"></span></div>
+      <div class="big reference" id="pi-ref"></div>
+      <div class="hint">π (reference)</div>
+      <div class="mono" id="err"></div>
+      <div class="mono" id="digits"></div>
+      <label class="check"><input type="checkbox" id="zoom" checked> Auto-zoom estimate plot</label>
+    </div>
+  </aside>
+  <section class="plots">
+    <div class="plot"><canvas id="est-plot" aria-label="Estimate against pi"></canvas></div>
+    <div class="plot"><canvas id="err-plot" aria-label="Size of the error, log scales"></canvas></div>
+  </section>
+</main>
+
+<section id="help" class="help" hidden aria-label="Learn">
+  <div class="help-head">
+    <span class="help-title">Learn</span>
+    <button class="help-close" type="button" aria-label="Close">✕</button>
+  </div>
+  <div class="help-main">
+    <nav class="help-topics" aria-label="Topics"></nav>
+    <article class="help-body" tabindex="-1"></article>
+  </div>
+</section>
+</body>
+</html>

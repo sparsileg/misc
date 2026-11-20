@@ -39,7 +39,7 @@ The crawl is Archimedes' polygon method seen differently. Archimedes chooses the
 
 ## Why the GUI takes longer here
 
-A circle of radius r takes about 6r steps, and the GUI walks every circle from radius 1 up to N, about 3N² steps in all. That is fine up to a few thousand, but N = 100,000 would mean about 30,000,000,000 steps. The command-line program `genpi-crawl.py` walks only the one circle you ask for, so it is fast even for large radii.
+A circle of radius r takes about 6r steps, and the GUI walks every circle from radius 1 up to N, about 3N² steps in all. That is fine up to a few thousand, but N = 100,000 would mean about 30,000,000,000 steps. The command-line program `genpi-crawl.py`, part of the Python version, walks only the one circle you ask for, so it is fast even for large radii.
 
 ## The coastline paradox
 

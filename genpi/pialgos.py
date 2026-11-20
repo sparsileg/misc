@@ -175,7 +175,8 @@ def crawl_circle(r: int) -> float:
             break
         x, y = nx, ny
         steps += 1
-    gap = math.hypot(x - r, y)
+    dx = x - r
+    gap = math.sqrt(dx * dx + y * y)       # not hypot: keeps web/pialgos.js identical
     return (steps + gap) / (2.0 * r)
 
 
