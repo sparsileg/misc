@@ -1,2 +1,4 @@
 __pycache__/
 site/
+node_modules/
+package-lock.json
