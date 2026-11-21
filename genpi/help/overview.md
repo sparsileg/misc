@@ -15,6 +15,7 @@ When there are too many elements to draw one by one, each column of pixels shows
 - slope −3 (Pascal's triangle): ten times more, three more digits
 - slope −½ on average (Buffon's needle): a *hundred* times more drops for one more digit
 - a curve that bends ever more steeply downward (Archimedes): each step multiplies the accuracy, which is faster than any power law
+- a straight drop to the floor (Ramanujan's series, Chudnovsky formula): each term adds about 8 or 14 digits, so 2 terms use up all the computer's precision
 
 ## The readout
 
@@ -24,7 +25,7 @@ Correct digits and size of error are not quite the same thing. An estimate of 3.
 
 ## The floor at about 10⁻¹⁶
 
-The computer stores numbers with about 16 significant digits. Once an estimate gets within about 0.0000000000000004 of π, it cannot get any closer: the error line flattens out or jitters at the bottom of the plot. This is a limit of the arithmetic, not of the method. Pascal's triangle and Archimedes' polygons both reach it.
+The computer stores numbers with about 16 significant digits. Once an estimate gets within about 0.0000000000000004 of π, it cannot get any closer: the error line flattens out or jitters at the bottom of the plot. This is a limit of the arithmetic, not of the method. Pascal's triangle, Archimedes' polygons, Ramanujan's series and the Chudnovsky formula all reach it.
 
 ## How many elements for an error below one millionth?
 
@@ -34,6 +35,8 @@ The computer stores numbers with about 16 significant digits. Once an estimate g
 - Buffon's needle: about 5,600,000,000,000 drops, on average
 - Archimedes' polygons: 10 polygons (the last has 3,072 sides)
 - Circumference crawl: a circle of radius about 362
+- Ramanujan's series: 1 term
+- Chudnovsky formula: 1 term (its first estimate is already within 0.00000000000006)
 
 Speed per element is not the whole story: a crawl around a circle of radius 362 takes about 2,300 steps, while a Leibniz term is a single division.
 

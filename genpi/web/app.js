@@ -479,14 +479,18 @@ class PiApp {
 
     const last = this.lastEstBin;
     let half = 0;
+    let seen = false;
     if (last >= 0) {
       const first = $("zoom").checked ? Math.floor(last / 4) : 0;
       for (let b = first; b <= last; b++) {
-        if (this.estLo[b] === this.estLo[b])
+        if (this.estLo[b] === this.estLo[b]) {
+          seen = true;
           half = Math.max(half, Math.abs(this.estLo[b] - PI), Math.abs(this.estHi[b] - PI));
+        }
       }
     }
-    half = half ? Math.max(half * 1.15, 1e-14) : 1;
+    // Estimates that equal pi exactly still get the finest scale, not +-1.
+    half = seen ? Math.max(half * 1.15, 1e-14) : 1;
     const mid = (T + B) / 2;
     const ymap = (v) => Math.min(B, Math.max(T, mid - (v - PI) / half * (B - T) / 2));
 
@@ -509,9 +513,12 @@ class PiApp {
 
     for (const frac of [0, 0.25, 0.5, 0.75, 1]) {
       const x = L + frac * span;
-      const n = Math.max(1, Math.round(frac * this.N));
-      line(ctx, x, B, x, B + 4, C.axis);
-      text(ctx, x, B + 6, fmtShort(n), frac === 1 ? "ne" : "n", C.muted);
+      const v = 1 + frac * (this.N - 1);         // element 1 is at the left edge
+      const n = Math.floor(v + 0.5);
+      if (this.N > 20 || Math.abs(v - n) < 1e-9) {   // small N: only ticks that land on an element
+        line(ctx, x, B, x, B + 4, C.axis);
+        text(ctx, x, B + 6, fmtShort(n), frac === 1 ? "ne" : "n", C.muted);
+      }
     }
 
     if (last < 0) {

@@ -5,18 +5,21 @@ Markdown that the help files use is understood:
 
     # / ## / ### headings      - bullets          1. numbered items
     ``` fenced blocks ```      > callouts         **bold** *italic* `code`
+    [text](https://...) links, opened in the web browser
 
 Paragraph lines are joined and wrapped to the window width.
 """
 
 import re
 import tkinter as tk
+import webbrowser
 from pathlib import Path
 from tkinter import ttk
 
 HELP_DIR = Path(__file__).resolve().parent / "help"
 
-INLINE = re.compile(r"(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|`[^`]+`)")
+INLINE = re.compile(r"(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|`[^`]+`|\[[^\]]+\]\(https?://[^)\s]+\))")
+LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
 NUMBERED = re.compile(r"^(\d+)\.\s+(.*)")
 
 COLORS = {
@@ -43,11 +46,20 @@ def render(text_widget: tk.Text, markdown: str) -> None:
     i = 0
     first = True
 
+    links = 0
+
     def inline(s: str, base: tuple[str, ...]) -> None:
+        nonlocal links
         for part in INLINE.split(s):
             if not part:
                 continue
-            if part.startswith("**") and part.endswith("**") and len(part) > 4:
+            link = LINK.fullmatch(part)
+            if link:
+                links += 1
+                tag = f"link{links}"
+                t.insert("end", link[1], base + ("link", tag))
+                t.tag_bind(tag, "<Button-1>", lambda e, url=link[2]: webbrowser.open(url))
+            elif part.startswith("**") and part.endswith("**") and len(part) > 4:
                 t.insert("end", part[2:-2], base + ("bold",))
             elif part.startswith("`") and part.endswith("`") and len(part) > 2:
                 t.insert("end", part[1:-1], base + ("code",))
@@ -194,10 +206,14 @@ class HelpWindow(tk.Toplevel):
         t.tag_configure("bold", font=(SANS, 11, "bold"))
         t.tag_configure("italic", font=(SANS, 11, "italic"))
         t.tag_configure("code", font=(MONO, 10), background=COLORS["code_bg"])
+        t.tag_configure("link", foreground=COLORS["accent"], underline=True)
+        t.tag_bind("link", "<Enter>", lambda e: t.configure(cursor="hand2"))
+        t.tag_bind("link", "<Leave>", lambda e: t.configure(cursor="arrow"))
         t.configure(tabs=("34",))
         t.tag_raise("bold")
         t.tag_raise("italic")
         t.tag_raise("code")
+        t.tag_raise("link")
 
     def show(self, index: int) -> None:
         index = max(0, min(index, len(self.topics) - 1))

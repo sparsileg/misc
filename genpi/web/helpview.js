@@ -3,8 +3,10 @@
 //
 //   # / ## / ### headings      - bullets          1. numbered items
 //   ``` fenced blocks ```      > callouts         **bold** *italic* `code`
+//   [text](https://...) links, opened in a new tab
 
-const INLINE = /(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|`[^`]+`)/;
+const INLINE = /(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)\s]+\))/;
+const LINK = /^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/;
 const NUMBERED = /^(\d+)\.\s+(.*)/;
 
 function escapeHtml(s) {
@@ -13,6 +15,10 @@ function escapeHtml(s) {
 
 function inline(s) {
   return s.split(INLINE).map((part) => {
+    const link = part.match(LINK);
+    if (link)
+      return `<a href="${escapeHtml(link[2]).replace(/"/g, "&quot;")}" target="_blank" ` +
+             `rel="noopener noreferrer">${escapeHtml(link[1])}</a>`;
     if (part.length > 4 && part.startsWith("**") && part.endsWith("**"))
       return `<strong>${escapeHtml(part.slice(2, -2))}</strong>`;
     if (part.length > 2 && part.startsWith("`") && part.endsWith("`"))

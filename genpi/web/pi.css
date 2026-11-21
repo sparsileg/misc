@@ -139,6 +139,7 @@ main {
 .help-body ul, .help-body ol { margin: 0 0 14px; padding-left: 26px; }
 .help-body li { margin-bottom: 4px; }
 .help-body li::marker { color: var(--accent); }
+.help-body a { color: var(--accent); }
 .help-body pre {
   font: 14px/1.4 var(--mono); background: var(--block);
   padding: 8px 14px; margin: 0 0 14px; border-radius: 4px; overflow-x: auto;

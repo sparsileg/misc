@@ -35,6 +35,8 @@ SEQUENCES = {             # algorithm -> how many estimates to compare
     "pascal": 1_000_000,  # past m = 200,000, where the JS switches to BigInt
     "archimedes": 60,
     "crawl": 1_000,       # radii 1..1000 (about 3 million divider steps)
+    "ramanujan": 60,      # the terms underflow to 0 long before 60
+    "chudnovsky": 60,
 }
 CRAWL_AT = [2_000, 5_000, 12_345, 50_000, 100_000]
 BUFFON_RUNS, BUFFON_DROPS = 400, 20_000

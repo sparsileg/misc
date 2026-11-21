@@ -99,7 +99,8 @@ async function run(name, n, frac = 1) {
 // 1. Deterministic algorithms: the readout must equal the Python CLI's output.
 const cases = [["Leibniz series", "leibniz", 100000], ["Euler prime product", "euler", 20000],
                ["Pascal's triangle", "pascal", 500], ["Archimedes' polygons", "archimedes", 30],
-               ["Circumference crawl", "crawl", 300]];
+               ["Circumference crawl", "crawl", 300], ["Ramanujan's series", "ramanujan", 5],
+               ["Chudnovsky formula", "chudnovsky", 1]];
 for (const [name, cli, n] of cases) {
   const out = execFileSync("python3", [`${GENPI}/genpi-${cli}.py`, String(n)], { encoding: "utf8" });
   const pyEst = out.match(/pi ~=\s+(\S+)/)[1];
@@ -206,9 +207,11 @@ for (let i = 0; i < topics.length; i++) {
   await page.waitForFunction((t) => document.querySelector(".help-body h1")?.textContent === t,
                              i === 0 ? "Reading the plots" : topics[i]);
   const txt = await page.textContent(".help-body");
-  const leftovers = (txt.match(/\*\*|```|(^|\s)\*\S|`|^#|^> /gm) || []);
+  const leftovers = (txt.match(/\*\*|```|(^|\s)\*\S|`|^#|^> |\]\(/gm) || []);
   const html = await page.innerHTML(".help-body");
-  check(leftovers.length === 0, `topic "${topics[i]}": ${txt.length} chars, ${(html.match(/<pre>/g)||[]).length} formula blocks, ${(html.match(/<li>/g)||[]).length} list items, markup left: ${JSON.stringify(leftovers)}`);
+  check(leftovers.length === 0, `topic "${topics[i]}": ${txt.length} chars, ${(html.match(/<pre>/g)||[]).length} formula blocks, ${(html.match(/<li>/g)||[]).length} list items, ${(html.match(/<a /g)||[]).length} links, markup left: ${JSON.stringify(leftovers)}`);
+  for (const a of await page.$$eval(".help-body a", (as) => as.map((x) => [x.href, x.target, x.rel])))
+    check(/^https:\/\//.test(a[0]) && a[1] === "_blank" && a[2].includes("noopener"), `  link ${a[0]} opens in a new tab`);
 }
 await page.click(".help-topics button >> nth=0");
 await page.waitForTimeout(200);

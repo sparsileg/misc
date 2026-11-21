@@ -129,6 +129,40 @@ export function* crawl() {
   for (let r = 1; ; r++) yield crawlCircle(r);
 }
 
+export function* ramanujan() {
+  // Ramanujan (1914): 1/pi = (2 sqrt 2 / 9801) * sum of (4k)! (1103 + 26390k) / ((k!)^4 396^(4k)).
+  // Each term's factorial part is made from the previous one, as in pialgos.py.
+  const scale = 9801.0 / (2.0 * Math.sqrt(2.0));
+  let factor = 1.0;
+  let total = 1103.0;
+  let k = 0.0;
+  for (;;) {
+    yield scale / total;
+    k += 1.0;
+    factor *= (4.0 * k - 3.0) * (4.0 * k - 2.0) * (4.0 * k - 1.0) * (4.0 * k) /
+              (k * k * k * k * 24591257856.0);      // 396^4
+    total += factor * (1103.0 + 26390.0 * k);
+  }
+}
+
+export function* chudnovsky() {
+  // Chudnovsky (1988): pi = 426880 sqrt(10005) / sum of
+  // (6k)! (13591409 + 545140134k) / ((3k)! (k!)^3 (-640320^3)^k), as in pialgos.py.
+  const scale = 426880.0 * Math.sqrt(10005.0);
+  let factor = 1.0;
+  let total = 13591409.0;
+  let k = 0.0;
+  for (;;) {
+    yield scale / total;
+    k += 1.0;
+    factor *= (6.0 * k - 5.0) * (6.0 * k - 4.0) * (6.0 * k - 3.0) *
+              (6.0 * k - 2.0) * (6.0 * k - 1.0) * (6.0 * k) /
+              ((3.0 * k - 2.0) * (3.0 * k - 1.0) * (3.0 * k) * k * k * k *
+               -262537412640768000.0);               // -(640320^3)
+    total += factor * (13591409.0 + 545140134.0 * k);
+  }
+}
+
 export const ALGORITHMS = [
   {
     name: "Leibniz series",
@@ -175,5 +209,21 @@ export const ALGORITHMS = [
              "circles of radius 1, 2, 3, …",
     estimates: crawl,
     helpFile: "crawl.md",
+  },
+  {
+    name: "Ramanujan's series",
+    unit: "term",
+    formula: "1/π = (2√2/9801) · Σ (4k)! (1103 + 26390k) / ((k!)⁴ · 396⁴ᵏ)   " +
+             "k = 0, 1, 2, …   about 8 more correct digits per term",
+    estimates: ramanujan,
+    helpFile: "ramanujan.md",
+  },
+  {
+    name: "Chudnovsky formula",
+    unit: "term",
+    formula: "π = 426880√10005 ÷ Σ (6k)! (13591409 + 545140134k) / ((3k)! (k!)³ · (−640320³)ᵏ)   " +
+             "about 14 more correct digits per term",
+    estimates: chudnovsky,
+    helpFile: "chudnovsky.md",
   },
 ];

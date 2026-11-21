@@ -1,6 +1,6 @@
 # Pi Approximations
 
-Watch six ways of approximating π converge, one element at a time, and
+Watch eight ways of approximating π converge, one element at a time, and
 learn how each one works.
 
 - Leibniz series
@@ -9,6 +9,8 @@ learn how each one works.
 - Buffon's needle
 - Archimedes' polygons
 - Circumference crawl
+- Ramanujan's series
+- Chudnovsky formula
 
 ## Running it
 
@@ -35,6 +37,8 @@ Each method also has a command-line program that prints one estimate:
 python3 genpi-leibniz.py 1000000
 python3 genpi-pascal.py 100
 python3 genpi-archimedes.py 10
+python3 genpi-ramanujan.py 2
+python3 genpi-chudnovsky.py 1
 ```
 
 The number is how many elements to use: terms, primes, needle drops,

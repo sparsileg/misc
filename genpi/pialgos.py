@@ -186,6 +186,63 @@ def crawl() -> Iterator[float]:
         yield crawl_circle(r)
 
 
+def ramanujan() -> Iterator[float]:
+    """Ramanujan (1914): 1/pi = (2*sqrt(2)/9801) * sum over k = 0, 1, 2, ... of
+
+        (4k)! (1103 + 26390 k) / ((k!)^4 396^(4k))
+
+    Each term is about 99^4 (roughly 100 million) times smaller than the one
+    before, so each adds about 8 correct digits. The factorials and powers
+    are far too big to compute directly, so each term's factor
+    (4k)! / ((k!)^4 396^(4k)) is made from the previous one by multiplying by
+
+        (4k-3)(4k-2)(4k-1)(4k) / (k^4 396^4)
+
+    In ordinary 16-digit arithmetic the estimate reaches the limit of
+    precision at the second term. All arithmetic is in floats so that
+    web/pialgos.js can match it exactly.
+    """
+    scale = 9801.0 / (2.0 * math.sqrt(2.0))
+    factor = 1.0                     # (4k)! / ((k!)^4 396^(4k)), 1 for k = 0
+    total = 1103.0                   # the sum so far
+    k = 0.0
+    while True:
+        yield scale / total
+        k += 1.0
+        factor *= ((4.0 * k - 3.0) * (4.0 * k - 2.0) * (4.0 * k - 1.0) * (4.0 * k)
+                   / (k * k * k * k * 24591257856.0))      # 396^4
+        total += factor * (1103.0 + 26390.0 * k)
+
+
+def chudnovsky() -> Iterator[float]:
+    """Chudnovsky brothers (1988): pi = 426880 * sqrt(10005) / sum over k = 0, 1, 2, ... of
+
+        (6k)! (13591409 + 545140134 k) / ((3k)! (k!)^3 (-640320^3)^k)
+
+    Each term is about 640320^3 / 1728, roughly 150 trillion, times smaller
+    than the one before, so each adds about 14 correct digits, and the signs
+    alternate. As in ramanujan(), each term's factor
+    (6k)! / ((3k)! (k!)^3 (-640320^3)^k) is made from the previous one, by
+    multiplying by
+
+        (6k-5)(6k-4)(6k-3)(6k-2)(6k-1)(6k) / ((3k-2)(3k-1)(3k) k^3 (-640320^3))
+
+    In ordinary 16-digit arithmetic, 2 terms reach the limit of precision.
+    """
+    scale = 426880.0 * math.sqrt(10005.0)
+    factor = 1.0                     # (6k)! / ((3k)! (k!)^3 (-640320^3)^k), 1 for k = 0
+    total = 13591409.0               # the sum so far
+    k = 0.0
+    while True:
+        yield scale / total
+        k += 1.0
+        factor *= ((6.0 * k - 5.0) * (6.0 * k - 4.0) * (6.0 * k - 3.0)
+                   * (6.0 * k - 2.0) * (6.0 * k - 1.0) * (6.0 * k)
+                   / ((3.0 * k - 2.0) * (3.0 * k - 1.0) * (3.0 * k) * k * k * k
+                      * -262537412640768000.0))                # -(640320^3)
+        total += factor * (13591409.0 + 545140134.0 * k)
+
+
 ALGORITHMS: list[Algorithm] = [
     Algorithm(
         name="Leibniz series",
@@ -239,6 +296,24 @@ ALGORITHMS: list[Algorithm] = [
         estimates=crawl,
         estimate_at=crawl_circle,
         help_file="crawl.md",
+    ),
+    Algorithm(
+        name="Ramanujan's series",
+        unit="term",
+        formula="1/π = (2√2/9801) · Σ (4k)! (1103 + 26390k) / ((k!)⁴ · 396⁴ᵏ)   "
+                "k = 0, 1, 2, …   about 8 more correct digits per term",
+        count_help="number of terms",
+        estimates=ramanujan,
+        help_file="ramanujan.md",
+    ),
+    Algorithm(
+        name="Chudnovsky formula",
+        unit="term",
+        formula="π = 426880√10005 ÷ Σ (6k)! (13591409 + 545140134k) / ((3k)! (k!)³ · (−640320³)ᵏ)   "
+                "about 14 more correct digits per term",
+        count_help="number of terms",
+        estimates=chudnovsky,
+        help_file="chudnovsky.md",
     ),
 ]
 

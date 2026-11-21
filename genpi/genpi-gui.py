@@ -516,12 +516,15 @@ class PiApp:
         last = self.last_est_bin
         pi = math.pi
         half = 0.0
+        seen = False
         if last >= 0:
             first = last // 4 if self.zoom_var.get() else 0
             for b in range(first, last + 1):
                 if self.est_lo[b] == self.est_lo[b]:
+                    seen = True
                     half = max(half, abs(self.est_lo[b] - pi), abs(self.est_hi[b] - pi))
-        half = max(half * 1.15, 1e-14) if half else 1.0
+        # Estimates that equal pi exactly still get the finest scale, not +-1.
+        half = max(half * 1.15, 1e-14) if seen else 1.0
         mid = (T + B) / 2
 
         def ymap(v):
@@ -549,10 +552,12 @@ class PiApp:
         N = self.N
         for frac in (0, 0.25, 0.5, 0.75, 1):
             x = L + frac * span
-            n = max(1, round(frac * N))
-            cv.create_line(x, B, x, B + 4, fill=C["axis"])
-            cv.create_text(x, B + 6, text=fmt_short(n), fill=C["muted"], font=SMALL,
-                           anchor="ne" if frac == 1 else "n")
+            v = 1 + frac * (N - 1)                      # element 1 is at the left edge
+            n = math.floor(v + 0.5)
+            if N > 20 or abs(v - n) < 1e-9:             # small N: only ticks on an element
+                cv.create_line(x, B, x, B + 4, fill=C["axis"])
+                cv.create_text(x, B + 6, text=fmt_short(n), fill=C["muted"], font=SMALL,
+                               anchor="ne" if frac == 1 else "n")
 
         if last < 0:
             cv.create_text((L + R) / 2, mid - 20, text="Press Start", fill=C["muted"],
