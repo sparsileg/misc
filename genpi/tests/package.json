@@ -1,9 +1,0 @@
-{
-  "name": "genpi-tests",
-  "private": true,
-  "type": "module",
-  "description": "Browser test for the web version: npm install, then node browser_test.mjs",
-  "devDependencies": {
-    "playwright-core": "1.56.1"
-  }
-}
