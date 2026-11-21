@@ -16,6 +16,10 @@ matters for the primes, in three tabs:
 
 Hover over any plot to read off values.
 
+New to the Riemann Hypothesis? Start with
+[The Riemann Hypothesis, simply](riemann-hypothesis.md), a two-page
+explanation that assumes no advanced math.
+
 ## Running it
 
 You need Python 3.10 or newer, with Tk. Nothing else needs installing.
