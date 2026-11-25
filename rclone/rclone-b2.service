@@ -1,0 +1,22 @@
+# Mounts all B2 buckets (rclone remote "b2") at ~/cloud/b2 while you're logged in.
+#   systemctl --user status rclone-b2     (state)
+#   systemctl --user restart rclone-b2    (after changing the rclone config)
+#   systemctl --user disable --now rclone-b2   (turn it off)
+[Unit]
+Description=rclone mount of Backblaze B2 at ~/cloud/b2
+# Keep retrying if the network isn't up yet at login.
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+ExecStartPre=/usr/bin/mkdir -p %h/cloud/b2
+ExecStart=/usr/bin/rclone mount b2: %h/cloud/b2 \
+    --vfs-cache-mode writes \
+    --dir-cache-time 5m \
+    --log-level NOTICE
+ExecStop=/usr/bin/fusermount3 -uz %h/cloud/b2
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target
