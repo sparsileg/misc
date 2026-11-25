@@ -2,6 +2,48 @@
 
 System administration scripts for the Linux workstation.
 
+## archive-to-b2
+
+Copies one finished project folder to a Backblaze B2 bucket, and optionally to the USB backup drive, then verifies every file by checksum.
+
+```bash
+archive-to-b2 /mnt/vault/D-projects/NGC7635-Bubble-Nebula sparsile-astrophotography
+archive-to-b2 --usb /mnt/vault/D-projects/NGC7635-Bubble-Nebula sparsile-astrophotography
+archive-to-b2 -n --usb ...     # preview only, nothing is sent
+```
+
+The folder goes to the top level of the bucket under its own name:
+
+| | Destination |
+|---|---|
+| B2 | `b2:sparsile-astrophotography/NGC7635-Bubble-Nebula` |
+| USB (`--usb`) | `/mnt/backup/Astrophotography-Archive/NGC7635-Bubble-Nebula` |
+
+What it does:
+
+1. Checks the bucket can be opened and, with `--usb`, that the USB drive really is mounted (it refuses to write to the system drive if the drive is unplugged).
+2. Shows a preview for each destination (files to copy, already there, and any that exist with a different size and would be replaced) and asks before going ahead.
+3. Copies with `rclone copy`, with progress.
+4. Verifies with `rclone check` (SHA-1 on B2, MD5 on the USB drive) and prints **VERIFIED** or **VERIFY FAILED** for each destination.
+5. Saves a log to `~/.local/state/archive-to-b2/<date>-<folder>.log`.
+
+It is safe to run again: it never deletes anything on either side (copy, not sync), never touches the source, and a second run sends only what's missing. Removing the project from the vault afterwards is left to you, once both copies say VERIFIED.
+
+Options: `--usb`, `-n`/`--dry-run`, `-y`/`--yes` (no confirmation), `-h`/`--help`. Settings via environment variables: `ARCHIVE_REMOTE` (default `b2`), `ARCHIVE_USB_DIR` (default `/mnt/backup/Astrophotography-Archive`), `ARCHIVE_LOG_DIR`.
+
+### Setup
+
+- **rclone** with a remote named `b2` that uses a B2 application key (`sudo apt install rclone`, then `rclone config`).
+- **The USB drive at `/mnt/backup`.** An fstab entry with `x-systemd.automount` mounts it when it's first used, and `nofail` means boot doesn't wait if it's unplugged. `x-systemd.idle-timeout` unmounts it when idle, so it's usually safe to unplug:
+
+  ```
+  UUID=<drive UUID>  /mnt/backup  ntfs3  uid=1000,gid=1000,noatime,nofail,x-systemd.automount,x-systemd.idle-timeout=10min,x-systemd.device-timeout=5s  0 0
+  ```
+
+- **Put it on the PATH:** `ln -s ~/github/misc/sysadmin/archive-to-b2 ~/.local/bin/`
+
+**Note on the USB check:** right after copying, Linux may serve the files from memory, so the USB verify proves the data was written correctly but not necessarily that it reads back from the disk. For a full re-read later (after unplugging and replugging), run `rclone check <project folder> /mnt/backup/Astrophotography-Archive/<name>`.
+
 ## drive-health.sh
 
 A plain-English SMART health report for SATA SSDs, NVMe SSDs, hard drives and USB drives. For each drive it shows the key SMART readings, lists findings by severity, and ends with a verdict. A summary table of all drives comes last.

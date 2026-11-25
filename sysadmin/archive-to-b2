@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# archive-to-b2: copy one project folder to a Backblaze B2 bucket (and optionally the USB
+# backup drive), then verify every file.
+#
+# Usage:
+#   archive-to-b2 [options] FOLDER BUCKET
+#
+#   archive-to-b2 /mnt/vault/D-projects/NGC7635-Bubble-Nebula sparsile-astrophotography
+#     -> b2:sparsile-astrophotography/NGC7635-Bubble-Nebula
+#   with --usb, also
+#     -> /mnt/backup/Astrophotography-Archive/NGC7635-Bubble-Nebula
+#
+# The folder lands at the top level of the bucket (and of the USB archive) under its own name.
+#
+# Options:
+#   --usb          Also copy to the USB backup drive and verify it there.
+#   -n, --dry-run  Show what would be copied, then stop. Nothing is sent.
+#   -y, --yes      Don't ask for confirmation.
+#   -h, --help     Show this help.
+#
+# Safe by design: it only ever adds or updates files (rclone copy, never sync), so nothing is
+# deleted on either side, and it never removes the source. Running it again sends only what's
+# missing, so an interrupted run can simply be repeated.
+#
+# Settings (environment variables):
+#   ARCHIVE_REMOTE    rclone remote for B2           (default: b2)
+#   ARCHIVE_USB_DIR   archive folder on the USB drive (default: /mnt/backup/Astrophotography-Archive)
+#   ARCHIVE_LOG_DIR   where logs are kept             (default: ~/.local/state/archive-to-b2)
+
+set -u
+set -o pipefail
+
+REMOTE=${ARCHIVE_REMOTE:-b2}
+USB_DIR=${ARCHIVE_USB_DIR:-/mnt/backup/Astrophotography-Archive}
+LOG_DIR=${ARCHIVE_LOG_DIR:-$HOME/.local/state/archive-to-b2}
+
+if [[ -t 1 ]]; then R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; B=$'\e[1m'; D=$'\e[2m'; N=$'\e[0m'
+else R=; G=; Y=; B=; D=; N=; fi
+die() { echo "${R}Error:${N} $*" >&2; exit 1; }
+
+# ── Arguments ────────────────────────────────────────────────────────────────
+USB=0; DRY=0; YES=0; ARGS=()
+while (($#)); do
+  case $1 in
+    --usb) USB=1 ;;
+    -n|--dry-run) DRY=1 ;;
+    -y|--yes) YES=1 ;;
+    -h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --) shift; ARGS+=("$@"); break ;;
+    -*) die "unknown option $1 (try --help)" ;;
+    *) ARGS+=("$1") ;;
+  esac
+  shift
+done
+((${#ARGS[@]} == 2)) || die "expected FOLDER and BUCKET (try --help)"
+
+command -v rclone >/dev/null || die "rclone is not installed (sudo apt install rclone)"
+
+SRC=$(realpath -e -- "${ARGS[0]}" 2>/dev/null) || die "no such folder: ${ARGS[0]}"
+[[ -d $SRC ]] || die "not a folder: $SRC"
+NAME=$(basename -- "$SRC")
+[[ $SRC != / && -n $NAME ]] || die "refusing to archive $SRC"
+[[ -n $(find "$SRC" -type f -print -quit) ]] || die "$SRC has no files in it"
+
+BUCKET=${ARGS[1]%/}; BUCKET=${BUCKET#"$REMOTE":}
+[[ -n $BUCKET ]] || die "empty bucket name"
+DST_B2="$REMOTE:$BUCKET/$NAME"
+DST_USB="$USB_DIR/$NAME"
+
+# ── Check the destinations are there ─────────────────────────────────────────
+rclone lsf --max-depth 1 "$REMOTE:$BUCKET" >/dev/null 2>&1 \
+  || die "can't open bucket '$BUCKET' on remote '$REMOTE'. Check the name with: rclone lsd $REMOTE:"
+
+if ((USB)); then
+  # Opening the folder makes systemd mount the drive (x-systemd.automount). Then make sure it
+  # really is on a different filesystem from / , so we never fill the system drive by mistake
+  # when the USB drive is unplugged.
+  [[ -d $USB_DIR ]] || die "$USB_DIR not found. Is the USB backup drive plugged in?"
+  usb_fs=$(findmnt -no TARGET -T "$USB_DIR")
+  [[ -n $usb_fs && $usb_fs != / && $usb_fs != /home ]] \
+    || die "$USB_DIR is on the system drive ($usb_fs), not the USB drive. Is the drive plugged in?"
+  [[ -w $USB_DIR ]] || die "$USB_DIR is not writable (drive mounted read-only? An NTFS drive unplugged without unmounting needs repair: sudo ntfsfix -d <device>)"
+fi
+
+# ── Preview ──────────────────────────────────────────────────────────────────
+human() { numfmt --to=iec --suffix=B --format='%.1f' "$1"; }
+read -r n_files n_bytes < <(find "$SRC" -type f -printf '%s\n' | awk '{n++; s+=$1} END{print n+0, s+0}')
+
+# Compares by size only (fast). Prints "missing changed" counts for a destination.
+# In --combined output "+" = missing at the destination, "*" = different, "=" = same.
+# No output at all means rclone failed to list it; then count everything as to be copied.
+preview() {
+  local out; out=$(rclone check --one-way --size-only --combined - "$SRC" "$1" 2>/dev/null)
+  if [[ -z $out ]]; then printf '%s 0\n' "$n_files"; return; fi
+  printf '%s %s\n' "$(grep -c '^+ ' <<<"$out")" "$(grep -c '^\* ' <<<"$out")"
+}
+
+echo "${B}Archive${N} $SRC"
+echo "  $n_files files, $(human "$n_bytes")"
+echo
+TARGETS=("$DST_B2"); ((USB)) && TARGETS+=("$DST_USB")
+changed_any=0; to_send=0
+for t in "${TARGETS[@]}"; do
+  read -r miss chg < <(preview "$t")
+  same=$((n_files - miss - chg))
+  printf "  → %s\n" "$t"
+  printf "      %s to copy, %s already there" "$miss" "$same"
+  ((chg)) && { printf ", ${Y}%s exist with a different size and will be replaced${N}" "$chg"; changed_any=1; }
+  echo
+  to_send=$((to_send + miss + chg))
+done
+echo
+
+((to_send == 0)) && echo "Everything is already there.$( ((DRY)) || echo ' Verifying anyway.')"
+((changed_any)) && echo "${Y}Some files differ from the copy already archived. On B2 the old version is kept (hidden); on the USB drive it is overwritten.${N}"
+
+if ((DRY)); then echo "${D}Dry run: nothing was copied.${N}"; exit 0; fi
+if ((!YES && to_send > 0)); then
+  read -rp "Go ahead? [y/N] " ans
+  [[ $ans == [yY]* ]] || { echo "Cancelled."; exit 1; }
+fi
+
+# ── Copy and verify ──────────────────────────────────────────────────────────
+mkdir -p "$LOG_DIR"
+LOG="$LOG_DIR/$(date +%Y-%m-%d_%H%M%S)-$NAME.log"
+{ echo "archive-to-b2 $(date '+%F %T')"; echo "source: $SRC ($n_files files, $n_bytes bytes)"
+  printf 'target: %s\n' "${TARGETS[@]}"; } >"$LOG"
+
+declare -A RESULT
+for t in "${TARGETS[@]}"; do
+  echo; echo "${B}Copying to $t${N}"
+  if rclone copy -P --log-file "$LOG" --log-level INFO "$SRC" "$t"; then
+    echo "${B}Verifying $t${N} ${D}(checksums of every file)${N}"
+    # --one-way: every source file must be there and match; extra files at the destination are fine.
+    if rclone check --one-way --log-file "$LOG" --log-level NOTICE "$SRC" "$t"; then
+      RESULT[$t]="${G}VERIFIED${N}"; echo "verified: $t" >>"$LOG"
+    else
+      RESULT[$t]="${R}VERIFY FAILED${N} (see log)"; echo "VERIFY FAILED: $t" >>"$LOG"
+    fi
+  else
+    RESULT[$t]="${R}COPY FAILED${N} (see log; run again to retry)"; echo "COPY FAILED: $t" >>"$LOG"
+  fi
+done
+
+# ── Summary ──────────────────────────────────────────────────────────────────
+echo; echo "${B}Result for $NAME${N}"
+ok=1
+for t in "${TARGETS[@]}"; do
+  printf "  %-60s %s\n" "$t" "${RESULT[$t]}"
+  [[ ${RESULT[$t]} == *VERIFIED* ]] || ok=0
+done
+echo "  ${D}Log: $LOG${N}"
+if ((ok)); then
+  echo; echo "All copies verified. The source was not touched; remove it yourself when you're ready."
+  exit 0
+fi
+exit 1
