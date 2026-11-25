@@ -144,13 +144,15 @@ tag() {
     INFO) printf '%s' "${C}[ INFO ]${N}" ;;
     WARN|LINK) printf '%s' "${Y}[ WARN ]${N}" ;;
     FAIL) printf '%s' "${R}[ FAIL ]${N}" ;;
+    UNKN) printf '%s' "${Y}[  ??  ]${N}" ;;
     *)    printf '%s' "${D}[  --  ]${N}" ;;
   esac
 }
 row() { printf "  %-34s %-34s %s\n" "$1" "$2" "$(tag "$3")"; }
 
 FINDINGS=()
-add() { FINDINGS+=("$1|$2"); }   # severity: INFO WARN LINK FAIL   (LINK = cable/enclosure, not the drive)
+add() { FINDINGS+=("$1|$2"); }   # severity: INFO WARN LINK FAIL UNKN  (LINK = cable/enclosure, not the drive;
+                                 #   UNKN = SMART couldn't be read, so health is unknown)
 
 # Report a counter that should be zero. Usage: zero_counter <label> <value> <sev-if-nonzero> <explanation>
 zero_counter() {
@@ -184,17 +186,22 @@ run_selftests() {
   ((${#started[@]})) || return
   echo "Waiting for tests to finish (Ctrl-C stops waiting. Tests keep running on the drives)..."
   sleep 5
+  # One status line, updated in place and cut to the terminal width so it never wraps.
+  # Drives are shown by short kernel name (sda, nvme0n1), only while their test is running.
+  local cols; cols=$(tput cols 2>/dev/null || echo 80); ((cols > 20)) || cols=80
   while :; do
-    local busy=0 status=""
+    local busy=0 status="  Remaining:"
     for d in "${started[@]}"; do
-      local rem; rem=$(selftest_remaining "$d")
-      if [[ -n $rem ]]; then busy=1; status+="  ${d##*/}: ${rem}% left"; fi
+      local rem dn; rem=$(selftest_remaining "$d")
+      dn=$(readlink -f "$d"); dn=${dn##*/}
+      if [[ -n $rem ]]; then busy=1; status+=" $dn ${rem}%"; fi
     done
     ((busy)) || break
-    printf '\r\e[K%s' "${status:0:200}"
+    [[ -t 1 ]] && printf '\r\e[K%s' "${status:0:cols-1}"
     sleep 15
   done
-  printf '\r\e[K%s\n\n' "All self-tests finished."
+  [[ -t 1 ]] && printf '\r\e[K'
+  printf '%s\n\n' "All self-tests finished."
 }
 
 # ── Kernel log ───────────────────────────────────────────────────────────────
@@ -268,11 +275,11 @@ compare_history() {  # $1 = serial
     local -a keys=(
       "ata:5:Reallocated sectors" "ata:179:Used reserve blocks" "ata:181:Program fails" "ata:182:Erase fails"
       "ata:183:Runtime bad blocks" "ata:187:Uncorrectable errors" "ata:197:Pending sectors"
-      "ata:198:Offline uncorrectable" "ata:199:CRC (cable) errors"
+      "ata:198:Offline uncorrectable" "ata:199:CRC (cable) errors" "ata:188:Command timeouts"
       "nvme:media_errors:Media errors" "nvme:num_err_log_entries:Error log entries"
       "nvme:percentage_used:Percentage used"
     )
-    local k src id label old new grew=0
+    local k src id label old new grew=0 changed=0
     for k in "${keys[@]}"; do
       IFS=: read -r src id label <<<"$k"
       if [[ $src == ata ]]; then
@@ -283,15 +290,27 @@ compare_history() {  # $1 = serial
         new=$(jqr ".nvme_smart_health_information_log.$id // empty")
       fi
       [[ -z $old || -z $new ]] && continue
-      if ((new > old)); then
-        grew=1
-        local sev=WARN
-        [[ $id == 199 || $id == num_err_log_entries || $id == percentage_used ]] && sev=INFO
-        add "$sev" "$label grew from $old to $new since the last check ($when). A growing count means the drive is still degrading."
-      fi
+      # Seagate packs three counters into 188; compare only the total (low 16 bits).
+      [[ $id == 188 ]] && { old=$((old & 0xFFFF)); new=$((new & 0xFFFF)); }
+      ((new > old)) || continue
+      case $id in
+        199|188)
+          grew=1
+          add LINK "$label grew from $old to $new since the last check ($when). Something is still going wrong between the drive and the computer: reseat or replace the cable, or try another port or enclosure." ;;
+        num_err_log_entries)
+          changed=1
+          add INFO "$label went from $old to $new since the last check ($when). These usually record the system asking for features the drive doesn't support, not damage. They matter only if media errors grow too." ;;
+        percentage_used)
+          changed=1
+          add INFO "$label went from $old% to $new% since the last check ($when). That's normal wear from writing data." ;;
+        *)
+          grew=1
+          add WARN "$label grew from $old to $new since the last check ($when). A count that keeps growing means the drive is still degrading." ;;
+      esac
     done
-    ((grew)) && row "Change since last check" "counters grew (see findings)" WARN \
-             || row "Change since last check" "no growth since $when" OK
+    if ((grew)); then row "Change since last check" "error counts grew (see findings)" WARN
+    elif ((changed)); then row "Change since last check" "minor changes (see findings)" INFO
+    else row "Change since last check" "no growth since $when" OK; fi
   else
     row "Change since last check" "first run, baseline saved" NA
   fi
@@ -334,8 +353,18 @@ check_drive() {
   echo "${B}──────────────────────────────────────────────────────────────────────────────${N}"
 
   if (( rc & 2 )) || [[ $model == "unknown model" ]]; then
-    row "SMART data" "could not be read" FAIL
-    add FAIL "smartctl could not read this drive (exit code $rc). If it's on USB, the enclosure may not pass SMART through. Try another enclosure or connect it by SATA."
+    row "SMART data" "could not be read" UNKN
+    if is_usb "$path"; then
+      # Find the USB vendor:product ID, to suggest the usb-storage quirk that often unblocks SMART.
+      local p usbid=""; p=$(readlink -f "/sys/block/$dev/device")
+      while [[ $p == /sys/* && ! -e $p/idVendor ]]; do p=${p%/*}; done
+      [[ -e $p/idVendor ]] && usbid="$(<"$p/idVendor"):$(<"$p/idProduct")"
+      add UNKN "smartctl could not read this drive (exit code $rc), so its health is unknown. This is not a sign the drive is failing: the USB enclosure isn't passing SMART commands through.${usbid:+ Many enclosures do pass them under the older usb-storage driver. Unmount the drive, run 'echo ${usbid}:u | sudo tee /sys/module/usb_storage/parameters/quirks', unplug and replug it, and re-run. If that works, make it permanent with 'options usb-storage quirks=${usbid}:u' in /etc/modprobe.d/ and 'sudo update-initramfs -u'.} Meanwhile, --read-test checks the drive by reading every sector."
+    else
+      add UNKN "smartctl could not read this drive (exit code $rc), so its health is unknown. Run 'sudo smartctl -a $path' to see the error."
+    fi
+    kernel_log_check "$dev"
+    ((READ_TEST)) && read_test "/dev/$dev" "$kind"
     finish_drive "$dev" "$model" "$role"; return
   fi
 
@@ -423,11 +452,19 @@ check_drive() {
     zero_counter "Spin-up retries (10)"           "$(attr_raw 10)"  WARN "The motor struggled to spin up. This can mean a failing motor or a weak USB power supply."
     zero_counter "End-to-end errors (184)"        "$(attr_raw 184)" FAIL "Data was corrupted inside the drive's own electronics."
     zero_counter "CRC / interface errors (199)"   "$(attr_raw 199)" LINK "Data was corrupted between the drive and the USB bridge. Try another cable or port."
-    local ct; ct=$(attr_rawstr 188)
+    # Command timeouts. Seagate packs three 16-bit counters into this one raw value:
+    # all timeouts (low), those over 5 s (middle) and those over 7.5 s (high).
+    local ct ct_txt; ct=$(attr_raw 188)
     if [[ -n $ct ]]; then
-      if [[ $ct =~ [1-9] ]]; then row "Command timeouts (188)" "$ct" LINK
-        add LINK "Commands have timed out ($ct). On USB drives this is usually the enclosure or power, not the platters."
-      else row "Command timeouts (188)" "$ct" OK; fi
+      if [[ $model == ST* || $(jqr '.model_family // ""') == *Seagate* ]]; then
+        ct_txt="$((ct & 0xFFFF)) ($(((ct >> 16) & 0xFFFF)) over 5 s, $(((ct >> 32) & 0xFFFF)) over 7.5 s)"
+        ct=$((ct & 0xFFFF))
+      else
+        ct_txt=$ct
+      fi
+      if ((ct > 0)); then row "Command timeouts (188)" "$ct_txt" INFO
+        add INFO "$ct command(s) have timed out over the drive's life. On USB drives that's usually unplugging, sleep or power hiccups, not the platters. Each run compares this count with the last one; growth points to a cable, port or enclosure problem."
+      else row "Command timeouts (188)" "0" OK; fi
     fi
     local gs lc
     gs=$(attr_raw 191); [[ -n $gs ]] && { row "Shock events (191 G-sense)" "$gs" INFO
@@ -532,16 +569,17 @@ check_drive() {
 }
 
 finish_drive() {
-  local dev=$1 model=$2 role=$3 f sev text worst=OK link=0
+  local dev=$1 model=$2 role=$3 f sev text worst=OK link=0 unknown=0
   echo
   if ((${#FINDINGS[@]})); then
     echo "  ${B}Findings${N}"
-    for sev in FAIL WARN LINK INFO; do
+    for sev in FAIL UNKN WARN LINK INFO; do
       for f in "${FINDINGS[@]}"; do
         [[ ${f%%|*} == "$sev" ]] || continue
         text=${f#*|}
         case $sev in
           FAIL) echo "   ${R}✖${N} $text"; worst=FAIL ;;
+          UNKN) echo "   ${Y}?${N} $text"; unknown=1 ;;
           WARN) echo "   ${Y}!${N} $text"; [[ $worst == OK ]] && worst=WARN ;;
           LINK) echo "   ${Y}~${N} $text"; link=1 ;;
           INFO) echo "   ${D}·${N} $text" ;;
@@ -552,7 +590,11 @@ finish_drive() {
   fi
 
   local verdict
-  if [[ $role == backup ]]; then
+  if ((unknown)) && [[ $worst != FAIL ]]; then
+    # Without SMART there's nothing to judge the drive on. Say so instead of guessing.
+    verdict="${Y}${B}UNKNOWN${N}: SMART couldn't be read, so this report can't judge the drive (see above)."
+    worst=UNKN
+  elif [[ $role == backup ]]; then
     case $worst in
       FAIL|WARN) verdict="${R}${B}REPLACE NOW${N}: this drive holds every backup and is showing problems." ; worst=FAIL ;;
       OK) if ((link)); then verdict="${Y}${B}DRIVE OK, CONNECTION FLAKY${N}: try another cable/port/enclosure, then re-run."; worst=WARN
@@ -584,10 +626,11 @@ for s in "${SUMMARY[@]}"; do
   case $sev in
     OK)   res="${G}HEALTHY${N}" ;;
     WARN) res="${Y}WATCH${N}" ;;
+    UNKN) res="${Y}UNKNOWN (no SMART data)${N}" ;;
     FAIL) [[ $role == backup ]] && res="${R}REPLACE NOW${N}" || res="${R}FAILING: keep out of array${N}" ;;
   esac
   printf "  %-10s %-36s %-10s %s\n" "$dev" "${model:0:36}" "$role" "$res"
 done
 echo
-echo "${D}Legend: [ OK ] fine · [ INFO ] for reference · [ WARN ] watch it · [ FAIL ] act now${N}"
+echo "${D}Legend: [ OK ] fine · [ INFO ] for reference · [ WARN ] watch it · [ FAIL ] act now · [  ??  ] unknown${N}"
 [[ -z $TEST_TYPE ]] && echo "${D}Tip: add --test short (or long) to run drive self-tests, and --read-test to read every sector.${N}"

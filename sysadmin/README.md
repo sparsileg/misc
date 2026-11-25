@@ -10,6 +10,7 @@ It was written for checking the drives in a RAID array and the USB backup drive,
 
 - **Internal drives** get *HEALTHY: OK to use in the array*, *USABLE, WATCH IT*, or *FAILING: do not put this drive in the array*.
 - **USB drives** count as the backup drive and are judged more strictly. Any warning means *REPLACE NOW*, because it holds every backup. A drive that's fine but has a flaky connection (resets, timeouts) gets *DRIVE OK, CONNECTION FLAKY* instead.
+- **Any drive whose SMART data can't be read** gets *UNKNOWN*. The report doesn't guess; it says why and how to fix it.
 
 ### Requirements
 
@@ -72,4 +73,17 @@ The `RATED_TBW` table near the top of the script holds each model's rated endura
 
 ### USB drives
 
-USB drives are read with `smartctl -d sat` (SMART pass-through). Some USB enclosures don't pass SMART through, and the report then says *smartctl could not read this drive*. Try a different enclosure, or connect the drive by SATA.
+USB drives are read with `smartctl -d sat` (SMART pass-through). Some USB enclosures don't pass SMART through under the newer `uas` driver, and the report then says *UNKNOWN*. Many of them do under the older `usb-storage` driver. The report prints the exact commands for the drive's USB ID; for example, for a Seagate Backup Plus Slim (`0bc2:ab24`):
+
+```bash
+# Try it (lasts until reboot): unmount the drive first, then unplug and replug it after this
+echo 0bc2:ab24:u | sudo tee /sys/module/usb_storage/parameters/quirks
+
+# If smartctl can now read it, make it permanent
+echo 'options usb-storage quirks=0bc2:ab24:u' | sudo tee /etc/modprobe.d/seagate-backup-no-uas.conf
+sudo update-initramfs -u
+```
+
+`usb-storage` has a little more overhead than `uas`, which doesn't matter for a hard drive. If SMART still can't be read, use `--read-test` and the kernel-log checks to keep an eye on the drive.
+
+Seagate drives pack three counters into attribute 188 (command timeouts): all timeouts, those over 5 s, and those over 7.5 s. The report decodes it, e.g. `40 (14 over 5 s, 13 over 7.5 s)`, and tracks the total from run to run.
