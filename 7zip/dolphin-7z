@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# dolphin-7z ACTION FILE...   Run 7-Zip on files selected in Dolphin (see ~/.local/share/kio/servicemenus/7zip-*.desktop).
+# ACTION: a7z | atgz (archive the selection) | xhere | xdir (extract each archive) | test
+action=$1; shift
+[ $# -gt 0 ] || exit 1
+cd "$(dirname "$1")" || exit 1
+
+# Archive name: one item -> its name (file extension dropped); several -> the folder's name.
+# Never add to an existing archive: pick "name (2).7z" etc. instead.
+archive_name() {   # archive_name EXT ITEM...
+  local ext=$1 base n=2 out; shift
+  if [ $# -eq 1 ]; then base=$(basename "$1"); [ -d "$1" ] || base=${base%.*}; else base=$(basename "$PWD"); fi
+  out="$base.$ext"
+  while [ -e "$out" ]; do out="$base ($n).$ext"; n=$((n + 1)); done
+  printf '%s' "$out"
+}
+names=(); for f in "$@"; do names+=("$(basename "$f")"); done
+
+status=0
+case $action in
+  a7z)  out=$(archive_name 7z "${names[@]}")
+        7z a -- "$out" "${names[@]}" || status=$? ;;
+  atgz) out=$(archive_name tar.gz "${names[@]}")
+        tar -czf "$out" -- "${names[@]}" || status=$? ;;
+  xhere) for f in "${names[@]}"; do 7z x -- "$f" || status=$?; done ;;
+  xdir)  for f in "${names[@]}"; do d=${f%.*}; d=${d%.tar}; 7z x -o"$d" -- "$f" || status=$?; done ;;
+  test)  for f in "${names[@]}"; do 7z t -- "$f" || status=$?; done ;;
+  *) echo "unknown action: $action"; status=2 ;;
+esac
+
+if [ $status -eq 0 ]; then
+  notify-send -i 7zip -a 7-Zip "7-Zip finished" "$action: ${names[*]}"
+  [ "$action" = test ] && [ -t 0 ] && read -rp "All OK. Press Enter to close."
+else
+  notify-send -u critical -a 7-Zip "7-Zip failed" "$action: ${names[*]}"
+  [ -t 0 ] && read -rp "7-Zip reported an error (exit $status). Press Enter to close."
+fi
+exit $status

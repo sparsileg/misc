@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Service
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=all/allfiles;inode/directory;
+Actions=add7z;addtgz;
+X-KDE-Priority=TopLevel
+TryExec=7z
+
+[Desktop Action add7z]
+Name=Compress to .7z (7-Zip)
+Icon=application-x-7z-compressed
+Exec=konsole -p tabtitle=7-Zip -e ~/.local/bin/dolphin-7z a7z %F
+
+[Desktop Action addtgz]
+Name=Compress to .tar.gz
+Icon=application-x-compressed-tar
+Exec=konsole -p tabtitle=tar -e ~/.local/bin/dolphin-7z atgz %F

@@ -1,0 +1,23 @@
+[Desktop Entry]
+Type=Service
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=application/x-7z-compressed;application/zip;application/x-rar;application/vnd.rar;application/x-tar;application/x-compressed-tar;application/x-bzip-compressed-tar;application/x-xz-compressed-tar;application/x-zstd-compressed-tar;application/gzip;application/x-bzip2;application/x-xz;application/zstd;application/x-cd-image;application/x-iso9660-image;
+Actions=xhere;xdir;test;
+X-KDE-Priority=TopLevel
+Icon=7zip
+TryExec=7z
+
+[Desktop Action xhere]
+Name=Extract here (7-Zip)
+Icon=archive-extract
+Exec=konsole -p tabtitle=7-Zip -e ~/.local/bin/dolphin-7z xhere %F
+
+[Desktop Action xdir]
+Name=Extract to folder (7-Zip)
+Icon=archive-extract
+Exec=konsole -p tabtitle=7-Zip -e ~/.local/bin/dolphin-7z xdir %F
+
+[Desktop Action test]
+Name=Test archive (7-Zip)
+Icon=dialog-ok
+Exec=konsole -p tabtitle=7-Zip -e ~/.local/bin/dolphin-7z test %F
