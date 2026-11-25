@@ -1,7 +1,7 @@
-# Mounts all B2 buckets (rclone remote "b2") at ~/cloud/b2 while you're logged in.
+# Mounts all B2 buckets (rclone remote "b2") at ~/cloud/b2 on demand (aliases b2-mount / b2-umount).
 #   systemctl --user status rclone-b2     (state)
 #   systemctl --user restart rclone-b2    (after changing the rclone config)
-#   systemctl --user disable --now rclone-b2   (turn it off)
+#   systemctl --user start/stop rclone-b2   (mount / unmount)
 [Unit]
 Description=rclone mount of Backblaze B2 at ~/cloud/b2
 # Keep retrying if the network isn't up yet at login.
