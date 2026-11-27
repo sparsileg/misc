@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
 import pathlib
 import re
 import subprocess
+import sys
 import tempfile
 
 TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
@@ -70,6 +72,14 @@ SIZE_RE  = re.compile(r"^Size:\s*(.+)$", re.MULTILINE)
 #       python3 gh-issue-insert.py issues \
 #           --project-owner OWNER \
 #           --project-number PROJECT_NUMBER
+#
+#   Import issues into a project with a given Status (an option name of the
+#   project's Status field, e.g. "To Do" or "Deferred"):
+#
+#       python3 gh-issue-insert.py issues \
+#           --project-owner OWNER \
+#           --project-number PROJECT_NUMBER \
+#           --status "To Do"
 #
 # Example:
 #
@@ -184,6 +194,33 @@ def get_project_id(owner, project_number):
         "--jq", ".id"
     ])
 
+def get_status_option(owner, project_number, status):
+    # The Status field's id and the id of the option named status. Checked
+    # before any issue is created, so a misspelt name creates nothing.
+    fields = json.loads(run([
+        "gh", "project", "field-list",
+        str(project_number),
+        "--owner", owner,
+        "--format", "json"
+    ]))["fields"]
+    field = next((f for f in fields if f["name"] == "Status"), None)
+    if not field:
+        sys.exit(f"Project {project_number} has no Status field")
+    names = {o["name"]: o["id"] for o in field.get("options", [])}
+    if status not in names:
+        sys.exit(f'No Status "{status}"; the options are: '
+                 + ", ".join(f'"{n}"' for n in names))
+    return field["id"], names[status]
+
+def set_status(project_id, item_id, field_id, option_id):
+    run([
+        "gh", "project", "item-edit",
+        "--id", item_id,
+        "--project-id", project_id,
+        "--field-id", field_id,
+        "--single-select-option-id", option_id
+    ])
+
 def add_to_project(project_id, issue_node):
     mutation = """
     mutation($project:ID!, $content:ID!) {
@@ -197,14 +234,15 @@ def add_to_project(project_id, issue_node):
     }
     """
 
-    run([
+    return run([
         "gh", "api", "graphql",
         "-f", f"query={mutation}",
         "-F", f"project={project_id}",
-        "-F", f"content={issue_node}"
+        "-F", f"content={issue_node}",
+        "--jq", ".data.addProjectV2ItemById.item.id"
     ])
 
-def create_issue(repo, mdfile, project_id=None):
+def create_issue(repo, mdfile, project_id=None, status_option=None):
     text = mdfile.read_text(encoding="utf-8")
 
     title_match = TITLE_RE.search(text)
@@ -257,8 +295,11 @@ def create_issue(repo, mdfile, project_id=None):
 
     if project_id:
         node = get_issue_node_id(repo, issue_number)
-        add_to_project(project_id, node)
+        item_id = add_to_project(project_id, node)
         print("  Added to project")
+        if status_option:
+            set_status(project_id, item_id, *status_option)
+            print("  Status set")
 
 def main():
     parser = argparse.ArgumentParser()
@@ -271,6 +312,9 @@ def main():
                         help="GitHub Project number")
     parser.add_argument("--project-owner",
                         help="Project owner (user or org)")
+    parser.add_argument("--status",
+                        help="Project Status to give each issue, by option "
+                             "name (e.g. \"To Do\"); needs --project-number")
     args = parser.parse_args()
 
     if args.repo:
@@ -288,6 +332,7 @@ def main():
     args.repo = repo
 
     project_id = None
+    status_option = None
 
     if args.project_number:
         if not args.project_owner:
@@ -296,6 +341,14 @@ def main():
             args.project_owner,
             args.project_number
         )
+        if args.status:
+            status_option = get_status_option(
+                args.project_owner,
+                args.project_number,
+                args.status
+            )
+    elif args.status:
+        parser.error("--status requires --project-number")
 
     target = pathlib.Path(args.directory)
 
@@ -305,7 +358,7 @@ def main():
         files = sorted(target.glob("*.md"))
 
     for md in files:
-        create_issue(args.repo, md, project_id)
+        create_issue(args.repo, md, project_id, status_option)
 
 if __name__ == "__main__":
     main()
